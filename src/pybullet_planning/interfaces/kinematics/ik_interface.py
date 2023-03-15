@@ -1,11 +1,27 @@
+from pybullet_planning.interfaces.env_manager.pose_transformation import (
+    get_distance,
+    invert,
+    matrix_from_quat,
+    multiply,
+    point_from_pose,
+    quat_from_matrix,
+    quat_from_pose,
+    unit_pose,
+)
+from pybullet_planning.interfaces.robots.joint import (
+    get_joint_positions,
+    joints_from_names,
+    violates_limits,
+)
+from pybullet_planning.interfaces.robots.link import (
+    get_link_pose,
+    link_from_name,
+)
 
-from pybullet_planning.interfaces.env_manager.pose_transformation import multiply, invert, quat_from_matrix, matrix_from_quat, \
-    point_from_pose, quat_from_pose, get_distance, unit_pose
-from pybullet_planning.interfaces.robots.joint import joints_from_names, get_joint_positions, violates_limits
-from pybullet_planning.interfaces.robots.link import get_link_pose, link_from_name
 
-def get_ik_tool_link_pose(fk_fn, robot, ik_joints, base_link, \
-                          joint_values=None, use_current=False):
+def get_ik_tool_link_pose(
+    fk_fn, robot, ik_joints, base_link, joint_values=None, use_current=False
+):
     """Use the given forward_kinematics function to compute ik_tool_link pose
     based on current joint configurations in pybullet.
 
@@ -43,7 +59,14 @@ def get_ik_tool_link_pose(fk_fn, robot, ik_joints, base_link, \
     return multiply(world_from_base, base_from_tool)
 
 
-def get_ik_generator(ik_fn, robot, base_link, world_from_tcp, ik_tool_link_from_tcp=None, **kwargs):
+def get_ik_generator(
+    ik_fn,
+    robot,
+    base_link,
+    world_from_tcp,
+    ik_tool_link_from_tcp=None,
+    **kwargs
+):
     """get an ik generator
 
     Parameters
@@ -68,15 +91,26 @@ def get_ik_generator(ik_fn, robot, base_link, world_from_tcp, ik_tool_link_from_
     world_from_base = get_link_pose(robot, base_link)
     base_from_tcp = multiply(invert(world_from_base), world_from_tcp)
     if ik_tool_link_from_tcp:
-        base_from_ik_tool_link = multiply(base_from_tcp, invert(ik_tool_link_from_tcp))
+        base_from_ik_tool_link = multiply(
+            base_from_tcp, invert(ik_tool_link_from_tcp)
+        )
     else:
         base_from_ik_tool_link = base_from_tcp
     yield compute_inverse_kinematics(ik_fn, base_from_ik_tool_link, **kwargs)
 
 
-def sample_tool_ik(ik_fn, robot, ik_joints, world_from_tcp, base_link,
-                   ik_tool_link_from_tcp=None,  closest_only=False, get_all=False, **kwargs):
-    """ sample ik joints for a given tcp pose in the world frame
+def sample_tool_ik(
+    ik_fn,
+    robot,
+    ik_joints,
+    world_from_tcp,
+    base_link,
+    ik_tool_link_from_tcp=None,
+    closest_only=False,
+    get_all=False,
+    **kwargs
+):
+    """sample ik joints for a given tcp pose in the world frame
 
     Parameters
     ----------
@@ -105,13 +139,19 @@ def sample_tool_ik(ik_fn, robot, ik_joints, world_from_tcp, base_link,
     a list of 6-list
         computed IK solutions that satisfy joint limits
     """
-    generator = get_ik_generator(ik_fn, robot, base_link, world_from_tcp, ik_tool_link_from_tcp, **kwargs)
+    generator = get_ik_generator(
+        ik_fn, robot, base_link, world_from_tcp, ik_tool_link_from_tcp, **kwargs
+    )
     sols = next(generator)
     if closest_only and sols:
         current_conf = get_joint_positions(robot, ik_joints)
         sols = [min(sols, key=lambda conf: get_distance(current_conf, conf))]
-    sols = list(filter(lambda conf: not violates_limits(robot, ik_joints, conf), sols))
-    return sols if get_all else select_solution(robot, ik_joints, sols, **kwargs)
+    sols = list(
+        filter(lambda conf: not violates_limits(robot, ik_joints, conf), sols)
+    )
+    return (
+        sols if get_all else select_solution(robot, ik_joints, sols, **kwargs)
+    )
 
 
 def compute_forward_kinematics(fk_fn, conf):
@@ -132,7 +172,7 @@ def compute_forward_kinematics(fk_fn, conf):
     """
     pose = fk_fn(list(conf))
     pos, rot = pose
-    quat = quat_from_matrix(rot) # [X,Y,Z,W]
+    quat = quat_from_matrix(rot)  # [X,Y,Z,W]
     return pos, quat
 
 
@@ -158,16 +198,19 @@ def compute_inverse_kinematics(ik_fn, pose, sampled=[]):
     """
     pos = point_from_pose(pose)
     rot = matrix_from_quat(quat_from_pose(pose)).tolist()
-    if sampled:
-        solutions = ik_fn(list(pos), list(rot), sampled)
+    if len(sampled) > 0:
+        # solutions = ik_fn(list(pos), list(rot), sampled)
+        solutions = ik_fn(list(rot), list(pos), sampled)
     else:
-        solutions = ik_fn(list(pos), list(rot))
+        solutions = ik_fn(list(rot), list(pos))
     if solutions is None:
         return []
     return solutions
 
 
-def select_solution(body, joints, solutions, nearby_conf=True, random=False, **kwargs):
+def select_solution(
+    body, joints, solutions, nearby_conf=True, random=False, **kwargs
+):
     """select one joint configuration given a list of them
 
     Parameters
@@ -198,6 +241,9 @@ def select_solution(body, joints, solutions, nearby_conf=True, random=False, **k
         nearby_conf = get_joint_positions(body, joints)
         # TODO: sort by distance before collision checking
         # TODO: search over neighborhood of sampled joints when nearby_conf != None
-        return min(solutions, key=lambda conf: get_distance(nearby_conf, conf, **kwargs))
+        return min(
+            solutions,
+            key=lambda conf: get_distance(nearby_conf, conf, **kwargs),
+        )
     else:
         return random.choice(solutions)
