@@ -2,6 +2,7 @@ import warnings
 from collections import namedtuple
 from itertools import product
 import numpy as np
+import time
 import pybullet as p
 
 from pybullet_planning.utils import get_client, BASE_LINK, MAX_DISTANCE, UNKNOWN_FILE
@@ -400,7 +401,7 @@ def get_collision_fn(body, joints, obstacles=[],
     lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits)
 
     # TODO: maybe prune the link adjacent to the robot
-    def collision_fn(q, diagnosis=False):
+    def collision_fn(q, diagnosis=False, time_profile=False):
         # * joint limit check
         if not all_between(lower_limits, q, upper_limits):
             if diagnosis:
@@ -414,12 +415,22 @@ def get_collision_fn(body, joints, obstacles=[],
                         print('J{}: {} > upper limit {}'.format(i, q[i], upper_limits[i]))
             return True
         # * set body & attachment positions
+        start_time = time.time()
         set_joint_positions(body, joints, q)
+        end_time = time.time()
+        if time_profile:
+            print(f'[Collision]: forward kinematics takes {end_time - start_time}s')
         for attachment in attachments:
             attachment.assign()
         # * self-collision link check
         for link1, link2 in self_check_link_pairs:
-            if pairwise_link_collision(body, link1, body, link2):
+            start_time = time.time()
+            in_collision = pairwise_link_collision(body, link1, body, link2)
+            end_time = time.time()
+            if time_profile:
+                print(f'[Collision]: pairwise checking takes {end_time - start_time}s, {len(self_check_link_pairs)} pairs in total.')
+                time_profile = False
+            if in_collision:
                 if diagnosis:
                     warnings.warn('moving body link - moving body link collision!', UserWarning)
                     cr = pairwise_link_collision_info(body, link1, body, link2)
